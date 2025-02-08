@@ -25,6 +25,11 @@ namespace GitHub.Runner.Worker.Handlers
     {
         public NodeJSActionExecutionData Data { get; set; }
 
+        private static readonly HttpClient _httpClient = new()
+        {
+            Timeout = TimeSpan.FromSeconds(5)
+        }; 
+
         public async Task RunAsync(ActionRunStage stage)
         {
             // Validate args.
@@ -81,12 +86,32 @@ namespace GitHub.Runner.Worker.Handlers
             if (!string.IsNullOrEmpty(magicCacheUrl))
             {
                 // always use v2 with Magic Cache
+                Environment["ACTIONS_ORIGINAL_CACHE_SERVICE_V2"] = Environment["ACTIONS_CACHE_SERVICE_V2"];
                 Environment["ACTIONS_CACHE_SERVICE_V2"] = bool.TrueString;
                 // Override the cache url and results url, keep the original urls
                 Environment["ACTIONS_ORIGINAL_CACHE_URL"] = Environment["ACTIONS_CACHE_URL"];
                 Environment["ACTIONS_ORIGINAL_RESULTS_URL"] = Environment["ACTIONS_RESULTS_URL"];
                 Environment["ACTIONS_CACHE_URL"] = magicCacheUrl;
                 Environment["ACTIONS_RESULTS_URL"] = magicCacheUrl;
+
+                // Configure magic cache with original results URL
+                try
+                {
+                    using var content = new FormUrlEncodedContent(new[]
+                    {
+                        new KeyValuePair<string, string>("ACTIONS_RESULTS_URL", Environment["ACTIONS_ORIGINAL_RESULTS_URL"]),
+                        new KeyValuePair<string, string>("ACTIONS_CACHE_URL", Environment["ACTIONS_ORIGINAL_CACHE_URL"]), 
+                        new KeyValuePair<string, string>("ACTIONS_CACHE_SERVICE_V2", Environment["ACTIONS_ORIGINAL_CACHE_SERVICE_V2"])
+                    });
+
+                    using var response = await _httpClient.PutAsync($"{magicCacheUrl}config", content);
+                    response.EnsureSuccessStatusCode();
+                    ExecutionContext.Debug($"Magic cache config update status: {response.StatusCode}");
+                }
+                catch (Exception ex)
+                {
+                    ExecutionContext.Warning($"Failed to configure magic cache: {ex.Message}");
+                }
             }
 
             // Resolve the target script.
