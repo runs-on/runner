@@ -31,7 +31,6 @@ namespace GitHub.Runner.Worker
         private IJobServerQueue _jobServerQueue;
         private RunnerSettings _runnerSettings;
         private ITempDirectoryManager _tempDirectoryManager;
-        private const string InterruptedHookPath = Path.Combine(HostContext.GetDirectory(WellKnownDirectory.Root), "runs-on-interrupted");
         private readonly CancellationTokenSource _interruptedHookTokenSource = new();
         private Task _interruptedHookTask;
 
@@ -225,6 +224,7 @@ namespace GitHub.Runner.Worker
                 // Start monitoring for interrupted hook file
                 _interruptedHookTask = Task.Run(async () =>
                 {
+                    string interruptedHookPath = Path.Combine(HostContext.GetDirectory(WellKnownDirectory.Root), "runs-on-interrupted");
                     while (!_interruptedHookTokenSource.Token.IsCancellationRequested)
                     {
                         try
