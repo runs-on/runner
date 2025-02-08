@@ -177,13 +177,13 @@ function package ()
 
     rm -Rf "${LAYOUT_DIR:?}/_diag"
     find "${LAYOUT_DIR}/bin" -type f -name '*.pdb' -delete
+    # hint that this is a custom agent built for https://runs-on.com
+    mkdir -p "${LAYOUT_DIR}/_runs-on"
 
     mkdir -p "$PACKAGE_DIR"
     rm -Rf "${PACKAGE_DIR:?}"/*
 
     pushd "$PACKAGE_DIR" > /dev/null
-    # hint that this is a custom agent built for https://runs-on.com
-    mkdir -p "_runs-on"
 
     if [[ ("$CURRENT_PLATFORM" == "linux") || ("$CURRENT_PLATFORM" == "darwin") ]]; then
         tar_name="${runner_pkg_name}.tar.gz"
