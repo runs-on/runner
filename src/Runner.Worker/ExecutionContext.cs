@@ -123,6 +123,9 @@ namespace GitHub.Runner.Worker
         void UpdateGlobalStepsContext();
 
         void WriteWebhookPayload();
+
+        // AddWarningAnnotation method
+        void AddWarningAnnotation(string message);
     }
 
     public sealed class ExecutionContext : RunnerService, IExecutionContext
@@ -207,7 +210,7 @@ namespace GitHub.Runner.Worker
         // Only job level ExecutionContext has PostJobSteps
         public Stack<IStep> PostJobSteps { get; private set; }
 
-        // Only job level ExecutionContext has StepsWithPostRegistered
+        // StepsWithPostRegistered for job ExecutionContext
         public HashSet<Guid> StepsWithPostRegistered { get; private set; }
 
         // Only job level ExecutionContext has EmbeddedStepsWithPostRegistered
@@ -930,6 +933,22 @@ namespace GitHub.Runner.Worker
 
             // Hook up JobServerQueueThrottling event, we will log warning on server tarpit.
             _jobServerQueue.JobServerQueueThrottling += JobServerQueueThrottling_EventReceived;
+
+            // Monitor the file system for the presence of the file /opt/runs-on/hooks/interrupted
+            Task.Run(() =>
+            {
+                var filePath = "/opt/runs-on/hooks/interrupted";
+                while (!CancellationToken.IsCancellationRequested)
+                {
+                    if (File.Exists(filePath))
+                    {
+                        AddWarningAnnotation($"File {filePath} found.");
+                        CancelToken();
+                        break;
+                    }
+                    Thread.Sleep(1000);
+                }
+            });
         }
 
         // Do not add a format string overload. In general, execution context messages are user facing and
@@ -1286,6 +1305,16 @@ namespace GitHub.Runner.Worker
             }
 
             UpdateGlobalStepsContext();
+        }
+
+        public void AddWarningAnnotation(string message)
+        {
+            var issue = new Issue
+            {
+                Type = IssueType.Warning,
+                Message = message
+            };
+            AddIssue(issue, ExecutionContextLogOptions.Default);
         }
 
         private static void NoOp()

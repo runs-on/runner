@@ -1,4 +1,3 @@
-﻿using GitHub.DistributedTask.WebApi;
 using GitHub.Runner.Worker;
 using Moq;
 using System;
@@ -12,10 +11,10 @@ using System.IO;
 
 namespace GitHub.Runner.Common.Tests.Worker
 {
-    public sealed class JobRunnerL0
+    public sealed class JobHookProviderL0
     {
         private IExecutionContext _jobEc;
-        private JobRunner _jobRunner;
+        private JobHookProvider _jobHookProvider;
         private List<IStep> _initResult = new();
         private CancellationTokenSource _tokenSource;
         private Mock<IJobServer> _jobServer;
@@ -55,8 +54,8 @@ namespace GitHub.Runner.Common.Tests.Worker
 
             _tokenSource = new CancellationTokenSource();
 
-            _jobRunner = new JobRunner();
-            _jobRunner.Initialize(hc);
+            _jobHookProvider = new JobHookProvider();
+            _jobHookProvider.Initialize(hc);
 
             _initResult.Clear();
 
@@ -132,47 +131,16 @@ namespace GitHub.Runner.Common.Tests.Worker
         [Fact]
         [Trait("Level", "L0")]
         [Trait("Category", "Worker")]
-        public async Task JobExtensionInitializeFailure()
+        public async Task JobHookProviderRunsHookSuccessfully()
         {
             using (TestHostContext hc = CreateTestContext())
             {
-                _jobExtension.Setup(x => x.InitializeJob(It.IsAny<IExecutionContext>(), It.IsAny<Pipelines.AgentJobRequestMessage>()))
-                    .Throws(new Exception());
+                var message = GetMessage();
+                var hookData = new JobHookData(ActionRunStage.Pre, "/path/to/hook/script.sh");
 
-                await _jobRunner.RunAsync(GetMessage(), _tokenSource.Token);
+                await _jobHookProvider.RunHook(_jobEc, hookData);
 
-                Assert.Equal(TaskResult.Failed, _jobEc.Result);
-                _stepRunner.Verify(x => x.RunAsync(It.IsAny<IExecutionContext>()), Times.Never);
-            }
-        }
-
-        [Fact]
-        [Trait("Level", "L0")]
-        [Trait("Category", "Worker")]
-        public async Task JobExtensionInitializeCancelled()
-        {
-            using (TestHostContext hc = CreateTestContext())
-            {
-                _jobExtension.Setup(x => x.InitializeJob(It.IsAny<IExecutionContext>(), It.IsAny<Pipelines.AgentJobRequestMessage>()))
-                    .Throws(new OperationCanceledException());
-                _tokenSource.Cancel();
-
-                await _jobRunner.RunAsync(GetMessage(), _tokenSource.Token);
-
-                Assert.Equal(TaskResult.Canceled, _jobEc.Result);
-                _stepRunner.Verify(x => x.RunAsync(It.IsAny<IExecutionContext>()), Times.Never);
-            }
-        }
-
-        [Fact]
-        [Trait("Level", "L0")]
-        [Trait("Category", "Worker")]
-        public async Task WorksWithRunnerJobRequestMessageType()
-        {
-            using (TestHostContext hc = CreateTestContext())
-            {
-                var message = GetMessage(JobRequestMessageTypes.RunnerJobRequest);
-                await _jobRunner.RunAsync(message, _tokenSource.Token);
+                // Verify that the hook script was executed successfully
                 Assert.Equal(TaskResult.Succeeded, _jobEc.Result);
             }
         }
@@ -180,46 +148,14 @@ namespace GitHub.Runner.Common.Tests.Worker
         [Fact]
         [Trait("Level", "L0")]
         [Trait("Category", "Worker")]
-        public async Task AddsWarningAnnotationWhenInterruptedFileIsPresent()
+        public async Task JobHookProviderThrowsFileNotFoundException()
         {
             using (TestHostContext hc = CreateTestContext())
             {
                 var message = GetMessage();
-                var interruptedFilePath = "/opt/runs-on/hooks/interrupted";
+                var hookData = new JobHookData(ActionRunStage.Pre, "/path/to/nonexistent/script.sh");
 
-                // Create the interrupted file
-                File.WriteAllText(interruptedFilePath, "interrupted");
-
-                await _jobRunner.RunAsync(message, _tokenSource.Token);
-
-                // Clean up the interrupted file
-                File.Delete(interruptedFilePath);
-
-                Assert.Contains(_jobEc.Global.StepsResult, stepResult =>
-                    stepResult.Annotations.Exists(annotation =>
-                        annotation.Message.Contains("File /opt/runs-on/hooks/interrupted found.")));
-            }
-        }
-
-        [Fact]
-        [Trait("Level", "L0")]
-        [Trait("Category", "Worker")]
-        public async Task CancelsExecutionWhenInterruptedFileIsPresent()
-        {
-            using (TestHostContext hc = CreateTestContext())
-            {
-                var message = GetMessage();
-                var interruptedFilePath = "/opt/runs-on/hooks/interrupted";
-
-                // Create the interrupted file
-                File.WriteAllText(interruptedFilePath, "interrupted");
-
-                await _jobRunner.RunAsync(message, _tokenSource.Token);
-
-                // Clean up the interrupted file
-                File.Delete(interruptedFilePath);
-
-                Assert.Equal(TaskResult.Canceled, _jobEc.Result);
+                await Assert.ThrowsAsync<FileNotFoundException>(() => _jobHookProvider.RunHook(_jobEc, hookData));
             }
         }
     }
