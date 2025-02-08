@@ -50,6 +50,7 @@ namespace GitHub.Runner.Worker.Handlers
                 }
             }
 
+            var magicCacheUrl = Environment.GetEnvironmentVariable("RUNS_ON_MAGIC_CACHE_URL");
             // Add Actions Runtime server info
             var systemConnection = ExecutionContext.Global.Endpoints.Single(x => string.Equals(x.Name, WellKnownServiceEndpointNames.SystemVssConnection, StringComparison.OrdinalIgnoreCase));
             Environment["ACTIONS_RUNTIME_URL"] = systemConnection.Url.AbsoluteUri;
@@ -75,6 +76,17 @@ namespace GitHub.Runner.Worker.Handlers
             if (ExecutionContext.Global.Variables.GetBoolean("actions_uses_cache_service_v2") ?? false)
             {
                 Environment["ACTIONS_CACHE_SERVICE_V2"] = bool.TrueString;
+            }
+
+            if (!string.IsNullOrEmpty(magicCacheUrl))
+            {
+                // always use v2 with Magic Cache
+                Environment["ACTIONS_CACHE_SERVICE_V2"] = bool.TrueString;
+                // Override the cache url and results url, keep the original urls
+                Environment["ACTIONS_ORIGINAL_CACHE_URL"] = Environment["ACTIONS_CACHE_URL"];
+                Environment["ACTIONS_ORIGINAL_RESULTS_URL"] = Environment["ACTIONS_RESULTS_URL"];
+                Environment["ACTIONS_CACHE_URL"] = magicCacheUrl;
+                Environment["ACTIONS_RESULTS_URL"] = magicCacheUrl;
             }
 
             // Resolve the target script.
