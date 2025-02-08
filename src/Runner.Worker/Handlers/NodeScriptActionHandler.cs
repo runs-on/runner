@@ -50,7 +50,7 @@ namespace GitHub.Runner.Worker.Handlers
                 }
             }
 
-            var magicCacheUrl = Environment.GetEnvironmentVariable("RUNS_ON_MAGIC_CACHE_URL");
+            var magicCacheUrl = System.Environment.GetEnvironmentVariable("RUNS_ON_MAGIC_CACHE_URL");
             // Add Actions Runtime server info
             var systemConnection = ExecutionContext.Global.Endpoints.Single(x => string.Equals(x.Name, WellKnownServiceEndpointNames.SystemVssConnection, StringComparison.OrdinalIgnoreCase));
             Environment["ACTIONS_RUNTIME_URL"] = systemConnection.Url.AbsoluteUri;
