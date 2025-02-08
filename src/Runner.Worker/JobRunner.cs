@@ -229,7 +229,7 @@ namespace GitHub.Runner.Worker
                     {
                         try
                         {
-                            if (File.Exists(InterruptedHookPath))
+                            if (File.Exists(interruptedHookPath))
                             {
                                 HostContext.ShutdownRunner(ShutdownReason.InfrastructureInterrupted);
                                 break;
