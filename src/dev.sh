@@ -182,6 +182,8 @@ function package ()
     rm -Rf "${PACKAGE_DIR:?}"/*
 
     pushd "$PACKAGE_DIR" > /dev/null
+    # hint that this is a custom agent built for https://runs-on.com
+    mkdir -p "_runs-on"
 
     if [[ ("$CURRENT_PLATFORM" == "linux") || ("$CURRENT_PLATFORM" == "darwin") ]]; then
         tar_name="${runner_pkg_name}.tar.gz"

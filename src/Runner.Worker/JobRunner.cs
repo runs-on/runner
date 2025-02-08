@@ -224,7 +224,7 @@ namespace GitHub.Runner.Worker
                 // Start monitoring for interrupted hook file
                 _interruptedHookTask = Task.Run(async () =>
                 {
-                    string interruptedHookPath = Path.Combine(HostContext.GetDirectory(WellKnownDirectory.Root), "runs-on-interrupted");
+                    string interruptedHookPath = Path.Combine(HostContext.GetDirectory(WellKnownDirectory.Root), "_runs-on", "interrupted");
                     while (!_interruptedHookTokenSource.Token.IsCancellationRequested)
                     {
                         try
