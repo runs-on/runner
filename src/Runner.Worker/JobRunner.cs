@@ -134,6 +134,9 @@ namespace GitHub.Runner.Worker
                         case ShutdownReason.OperatingSystemShutdown:
                             errorMessage = $"Operating system is shutting down for computer '{Environment.MachineName}'";
                             break;
+                        case ShutdownReason.InfrastructureInterrupted:
+                            errorMessage = "This job was interrupted by the runner infrastructure. Results may be incomplete.";
+                            break;
                         default:
                             throw new ArgumentException(HostContext.RunnerShutdownReason.ToString(), nameof(HostContext.RunnerShutdownReason));
                     }
@@ -220,7 +223,30 @@ namespace GitHub.Runner.Worker
                 }
 
                 // Start monitoring for interrupted hook file
-                _interruptedHookTask = MonitorInterruptedHookAsync(jobContext, _interruptedHookTokenSource.Token);
+                _interruptedHookTask = Task.Run(async () =>
+                {
+                    while (!_interruptedHookTokenSource.Token.IsCancellationRequested)
+                    {
+                        try
+                        {
+                            if (File.Exists(InterruptedHookPath))
+                            {
+                                HostContext.ShutdownRunner(ShutdownReason.InfrastructureInterrupted);
+                                break;
+                            }
+                            
+                            await Task.Delay(TimeSpan.FromSeconds(1), _interruptedHookTokenSource.Token);
+                        }
+                        catch (OperationCanceledException) when (_interruptedHookTokenSource.Token.IsCancellationRequested)
+                        {
+                            break;
+                        }
+                        catch (Exception ex)
+                        {
+                            Trace.Error($"Error checking interrupted hook file: {ex}");
+                        }
+                    }
+                }, _interruptedHookTokenSource.Token);
 
                 // Run all job steps
                 Trace.Info("Run all job steps.");
@@ -556,41 +582,6 @@ namespace GitHub.Runner.Worker
             {
                 // Ignore any error since suggest runner update is best effort.
                 Trace.Error($"Caught exception during runner version check: {ex}");
-            }
-        }
-
-        private async Task MonitorInterruptedHookAsync(IExecutionContext jobContext, CancellationToken token)
-        {
-            while (!token.IsCancellationRequested)
-            {
-                try
-                {
-                    if (File.Exists(InterruptedHookPath))
-                    {
-                        // Add warning annotation
-                        var issue = new Issue
-                        {
-                            Type = IssueType.Warning,
-                            Message = "This job was interrupted by the runner infrastructure. Results may be incomplete."
-                        };
-                        jobContext.AddIssue(issue, new Dictionary<string, string>());
-                        
-                        // Only warn once
-                        break;
-                    }
-                    
-                    await Task.Delay(TimeSpan.FromSeconds(1), token);
-                }
-                catch (OperationCanceledException) when (token.IsCancellationRequested)
-                {
-                    // Normal cancellation, ignore
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    // Log but continue monitoring
-                    Trace.Error($"Error checking interrupted hook file: {ex}");
-                }
             }
         }
     }
