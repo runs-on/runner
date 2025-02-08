@@ -31,6 +31,9 @@ namespace GitHub.Runner.Worker
         private IJobServerQueue _jobServerQueue;
         private RunnerSettings _runnerSettings;
         private ITempDirectoryManager _tempDirectoryManager;
+        private const string InterruptedHookPath = "/opt/runs-on/hooks/interrupted";
+        private readonly CancellationTokenSource _interruptedHookTokenSource = new();
+        private Task _interruptedHookTask;
 
         public async Task<TaskResult> RunAsync(AgentJobRequestMessage message, CancellationToken jobRequestCancellationToken)
         {
@@ -216,6 +219,9 @@ namespace GitHub.Runner.Worker
                     await Task.WhenAny(_jobServerQueue.JobRecordUpdated.Task, Task.Delay(1000));
                 }
 
+                // Start monitoring for interrupted hook file
+                _interruptedHookTask = MonitorInterruptedHookAsync(jobContext, _interruptedHookTokenSource.Token);
+
                 // Run all job steps
                 Trace.Info("Run all job steps.");
                 var stepsRunner = HostContext.GetService<IStepsRunner>();
@@ -254,6 +260,12 @@ namespace GitHub.Runner.Worker
                 {
                     runnerShutdownRegistration.Value.Dispose();
                     runnerShutdownRegistration = null;
+                }
+
+                if (_interruptedHookTask != null)
+                {
+                    _interruptedHookTokenSource.Cancel();
+                    await _interruptedHookTask;
                 }
 
                 await ShutdownQueue(throwOnFailure: false);
@@ -544,6 +556,41 @@ namespace GitHub.Runner.Worker
             {
                 // Ignore any error since suggest runner update is best effort.
                 Trace.Error($"Caught exception during runner version check: {ex}");
+            }
+        }
+
+        private async Task MonitorInterruptedHookAsync(IExecutionContext jobContext, CancellationToken token)
+        {
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    if (File.Exists(InterruptedHookPath))
+                    {
+                        // Add warning annotation
+                        var issue = new Issue
+                        {
+                            Type = IssueType.Warning,
+                            Message = "This job was interrupted by the runner infrastructure. Results may be incomplete."
+                        };
+                        jobContext.AddIssue(issue, new Dictionary<string, string>());
+                        
+                        // Only warn once
+                        break;
+                    }
+                    
+                    await Task.Delay(TimeSpan.FromSeconds(1), token);
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    // Normal cancellation, ignore
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    // Log but continue monitoring
+                    Trace.Error($"Error checking interrupted hook file: {ex}");
+                }
             }
         }
     }
