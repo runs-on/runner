@@ -31,6 +31,8 @@ namespace GitHub.Runner.Worker
         private IJobServerQueue _jobServerQueue;
         private RunnerSettings _runnerSettings;
         private ITempDirectoryManager _tempDirectoryManager;
+        private readonly CancellationTokenSource _interruptedHookTokenSource = new();
+        private Task _interruptedHookTask;
 
         public async Task<TaskResult> RunAsync(AgentJobRequestMessage message, CancellationToken jobRequestCancellationToken)
         {
@@ -131,6 +133,9 @@ namespace GitHub.Runner.Worker
                         case ShutdownReason.OperatingSystemShutdown:
                             errorMessage = $"Operating system is shutting down for computer '{Environment.MachineName}'";
                             break;
+                        case ShutdownReason.InfrastructureInterrupted:
+                            errorMessage = "This job was interrupted by the runner infrastructure. Results may be incomplete.";
+                            break;
                         default:
                             throw new ArgumentException(HostContext.RunnerShutdownReason.ToString(), nameof(HostContext.RunnerShutdownReason));
                     }
@@ -216,6 +221,33 @@ namespace GitHub.Runner.Worker
                     await Task.WhenAny(_jobServerQueue.JobRecordUpdated.Task, Task.Delay(1000));
                 }
 
+                // Start monitoring for interrupted hook file
+                _interruptedHookTask = Task.Run(async () =>
+                {
+                    string interruptedHookPath = Path.Combine(HostContext.GetDirectory(WellKnownDirectory.Root), "runs-on-interrupted");
+                    while (!_interruptedHookTokenSource.Token.IsCancellationRequested)
+                    {
+                        try
+                        {
+                            if (File.Exists(interruptedHookPath))
+                            {
+                                HostContext.ShutdownRunner(ShutdownReason.InfrastructureInterrupted);
+                                break;
+                            }
+                            
+                            await Task.Delay(TimeSpan.FromSeconds(1), _interruptedHookTokenSource.Token);
+                        }
+                        catch (OperationCanceledException) when (_interruptedHookTokenSource.Token.IsCancellationRequested)
+                        {
+                            break;
+                        }
+                        catch (Exception ex)
+                        {
+                            Trace.Error($"Error checking interrupted hook file: {ex}");
+                        }
+                    }
+                }, _interruptedHookTokenSource.Token);
+
                 // Run all job steps
                 Trace.Info("Run all job steps.");
                 var stepsRunner = HostContext.GetService<IStepsRunner>();
@@ -254,6 +286,12 @@ namespace GitHub.Runner.Worker
                 {
                     runnerShutdownRegistration.Value.Dispose();
                     runnerShutdownRegistration = null;
+                }
+
+                if (_interruptedHookTask != null)
+                {
+                    _interruptedHookTokenSource.Cancel();
+                    await _interruptedHookTask;
                 }
 
                 await ShutdownQueue(throwOnFailure: false);
