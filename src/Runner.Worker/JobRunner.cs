@@ -31,7 +31,7 @@ namespace GitHub.Runner.Worker
         private IJobServerQueue _jobServerQueue;
         private RunnerSettings _runnerSettings;
         private ITempDirectoryManager _tempDirectoryManager;
-        private const string InterruptedHookPath = "/opt/runs-on/hooks/interrupted";
+        private const string InterruptedHookPath = Path.Combine(HostContext.GetDirectory(WellKnownDirectory.Root), "runs-on-interrupted");
         private readonly CancellationTokenSource _interruptedHookTokenSource = new();
         private Task _interruptedHookTask;
 
