@@ -238,6 +238,7 @@ namespace GitHub.Runner.Worker.Handlers
             }
         }
 
+        // RunsOn: Magic Cache
         protected async Task ConfigureMagicCache()
         {
             var magicCacheUrl = System.Environment.GetEnvironmentVariable("RUNS_ON_MAGIC_CACHE_URL");

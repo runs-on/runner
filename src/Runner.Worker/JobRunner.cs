@@ -32,6 +32,7 @@ namespace GitHub.Runner.Worker
         private RunnerSettings _runnerSettings;
         private ITempDirectoryManager _tempDirectoryManager;
         private readonly CancellationTokenSource _interruptedHookTokenSource = new();
+        // RunsOn: Spot interruption
         private Task _interruptedHookTask;
 
         public async Task<TaskResult> RunAsync(AgentJobRequestMessage message, CancellationToken jobRequestCancellationToken)
@@ -133,6 +134,7 @@ namespace GitHub.Runner.Worker
                         case ShutdownReason.OperatingSystemShutdown:
                             errorMessage = $"Operating system is shutting down for computer '{Environment.MachineName}'";
                             break;
+                        // RunsOn: Spot interruption
                         case ShutdownReason.InfrastructureInterrupted:
                             errorMessage = "This job was interrupted by the runner infrastructure. Results may be incomplete.";
                             break;
@@ -221,7 +223,7 @@ namespace GitHub.Runner.Worker
                     await Task.WhenAny(_jobServerQueue.JobRecordUpdated.Task, Task.Delay(1000));
                 }
 
-                // Start monitoring for interrupted hook file
+                // RunsOn: Spot interruption
                 _interruptedHookTask = Task.Run(async () =>
                 {
                     string interruptedHookPath = Path.Combine(HostContext.GetDirectory(WellKnownDirectory.Root), "_runs-on", "interrupted");
@@ -288,6 +290,7 @@ namespace GitHub.Runner.Worker
                     runnerShutdownRegistration = null;
                 }
 
+                // RunsOn: Spot interruption
                 if (_interruptedHookTask != null)
                 {
                     _interruptedHookTokenSource.Cancel();
