@@ -56,7 +56,6 @@ namespace GitHub.Runner.Worker.Handlers
                 }
             }
 
-            var magicCacheUrl = System.Environment.GetEnvironmentVariable("RUNS_ON_MAGIC_CACHE_URL");
             // Add Actions Runtime server info
             var systemConnection = ExecutionContext.Global.Endpoints.Single(x => string.Equals(x.Name, WellKnownServiceEndpointNames.SystemVssConnection, StringComparison.OrdinalIgnoreCase));
             Environment["ACTIONS_RUNTIME_URL"] = systemConnection.Url.AbsoluteUri;
@@ -84,43 +83,7 @@ namespace GitHub.Runner.Worker.Handlers
                 Environment["ACTIONS_CACHE_SERVICE_V2"] = bool.TrueString;
             }
 
-            if (!string.IsNullOrEmpty(magicCacheUrl))
-            {
-                var configParams = new List<KeyValuePair<string, string>>();
-                if (Environment.ContainsKey("ACTIONS_CACHE_SERVICE_V2"))
-                {
-                    Environment["ACTIONS_CACHE_SERVICE_V2_ORIGINAL"] = Environment["ACTIONS_CACHE_SERVICE_V2"];
-                    configParams.Add(new KeyValuePair<string, string>("ACTIONS_CACHE_SERVICE_V2", Environment["ACTIONS_CACHE_SERVICE_V2_ORIGINAL"]));
-                }
-                if (Environment.ContainsKey("ACTIONS_CACHE_URL"))
-                {
-                    Environment["ACTIONS_CACHE_URL_ORIGINAL"] = Environment["ACTIONS_CACHE_URL"];
-                    configParams.Add(new KeyValuePair<string, string>("ACTIONS_CACHE_URL", Environment["ACTIONS_CACHE_URL_ORIGINAL"]));
-                }
-                if (Environment.ContainsKey("ACTIONS_RESULTS_URL"))
-                {
-                    Environment["ACTIONS_RESULTS_URL_ORIGINAL"] = Environment["ACTIONS_RESULTS_URL"];
-                    configParams.Add(new KeyValuePair<string, string>("ACTIONS_RESULTS_URL", Environment["ACTIONS_RESULTS_URL_ORIGINAL"]));
-                }
-
-                // always use v2 with Magic Cache
-                Environment["ACTIONS_CACHE_SERVICE_V2"] = bool.TrueString;
-                Environment["ACTIONS_CACHE_URL"] = magicCacheUrl;
-                Environment["ACTIONS_RESULTS_URL"] = magicCacheUrl;
-
-                // Configure magic cache with original results URL
-                try
-                {
-                    using var content = new FormUrlEncodedContent(configParams);
-                    using var response = await _httpClient.PutAsync($"{magicCacheUrl}config", content);
-                    response.EnsureSuccessStatusCode();
-                    ExecutionContext.Debug($"Magic cache config update status: {response.StatusCode}");
-                }
-                catch (Exception ex)
-                {
-                    ExecutionContext.Warning($"Failed to configure magic cache: {ex.Message}");
-                }
-            }
+            await ConfigureMagicCache();
 
             // Resolve the target script.
             string target = null;

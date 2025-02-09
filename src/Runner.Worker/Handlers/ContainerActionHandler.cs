@@ -237,6 +237,8 @@ namespace GitHub.Runner.Worker.Handlers
                 Environment["ACTIONS_RESULTS_URL"] = resultsUrl;
             }
 
+            await ConfigureMagicCache();
+
             foreach (var variable in this.Environment)
             {
                 container.ContainerEnvironmentVariables[variable.Key] = container.TranslateToContainerPath(variable.Value);
