@@ -12,6 +12,7 @@ using GitHub.Runner.Common.Util;
 using GitHub.Runner.Sdk;
 using GitHub.Runner.Worker.Container;
 using GitHub.Runner.Worker.Container.ContainerHooks;
+using System.Net.Http;
 
 namespace GitHub.Runner.Worker.Handlers
 {
