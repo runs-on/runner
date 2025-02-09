@@ -86,12 +86,12 @@ namespace GitHub.Runner.Worker.Handlers
 
             if (!string.IsNullOrEmpty(magicCacheUrl))
             {
-                // always use v2 with Magic Cache
                 Environment["ACTIONS_ORIGINAL_CACHE_SERVICE_V2"] = Environment["ACTIONS_CACHE_SERVICE_V2"];
-                Environment["ACTIONS_CACHE_SERVICE_V2"] = bool.TrueString;
-                // Override the cache url and results url, keep the original urls
                 Environment["ACTIONS_ORIGINAL_CACHE_URL"] = Environment["ACTIONS_CACHE_URL"];
                 Environment["ACTIONS_ORIGINAL_RESULTS_URL"] = Environment["ACTIONS_RESULTS_URL"];
+                // always use v2 with Magic Cache
+                Environment["ACTIONS_CACHE_SERVICE_V2"] = bool.TrueString;
+                // Override the cache url and results url, keep the original urls
                 Environment["ACTIONS_CACHE_URL"] = magicCacheUrl;
                 Environment["ACTIONS_RESULTS_URL"] = magicCacheUrl;
 
