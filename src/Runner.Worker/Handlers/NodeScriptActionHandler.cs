@@ -86,25 +86,32 @@ namespace GitHub.Runner.Worker.Handlers
 
             if (!string.IsNullOrEmpty(magicCacheUrl))
             {
-                Environment["ACTIONS_ORIGINAL_CACHE_SERVICE_V2"] = Environment["ACTIONS_CACHE_SERVICE_V2"];
-                Environment["ACTIONS_ORIGINAL_CACHE_URL"] = Environment["ACTIONS_CACHE_URL"];
-                Environment["ACTIONS_ORIGINAL_RESULTS_URL"] = Environment["ACTIONS_RESULTS_URL"];
+                var configParams = new List<KeyValuePair<string, string>>();
+                if (Environment.ContainsKey("ACTIONS_CACHE_SERVICE_V2"))
+                {
+                    Environment["ACTIONS_CACHE_SERVICE_V2_ORIGINAL"] = Environment["ACTIONS_CACHE_SERVICE_V2"];
+                    configParams.Add(new KeyValuePair<string, string>("ACTIONS_CACHE_SERVICE_V2", Environment["ACTIONS_CACHE_SERVICE_V2_ORIGINAL"]));
+                }
+                if (Environment.ContainsKey("ACTIONS_CACHE_URL"))
+                {
+                    Environment["ACTIONS_CACHE_URL_ORIGINAL"] = Environment["ACTIONS_CACHE_URL"];
+                    configParams.Add(new KeyValuePair<string, string>("ACTIONS_CACHE_URL", Environment["ACTIONS_CACHE_URL_ORIGINAL"]));
+                }
+                if (Environment.ContainsKey("ACTIONS_RESULTS_URL"))
+                {
+                    Environment["ACTIONS_RESULTS_URL_ORIGINAL"] = Environment["ACTIONS_RESULTS_URL"];
+                    configParams.Add(new KeyValuePair<string, string>("ACTIONS_RESULTS_URL", Environment["ACTIONS_RESULTS_URL_ORIGINAL"]));
+                }
+
                 // always use v2 with Magic Cache
                 Environment["ACTIONS_CACHE_SERVICE_V2"] = bool.TrueString;
-                // Override the cache url and results url, keep the original urls
                 Environment["ACTIONS_CACHE_URL"] = magicCacheUrl;
                 Environment["ACTIONS_RESULTS_URL"] = magicCacheUrl;
 
                 // Configure magic cache with original results URL
                 try
                 {
-                    using var content = new FormUrlEncodedContent(new[]
-                    {
-                        new KeyValuePair<string, string>("ACTIONS_RESULTS_URL", Environment["ACTIONS_ORIGINAL_RESULTS_URL"]),
-                        new KeyValuePair<string, string>("ACTIONS_CACHE_URL", Environment["ACTIONS_ORIGINAL_CACHE_URL"]), 
-                        new KeyValuePair<string, string>("ACTIONS_CACHE_SERVICE_V2", Environment["ACTIONS_ORIGINAL_CACHE_SERVICE_V2"])
-                    });
-
+                    using var content = new FormUrlEncodedContent(configParams);
                     using var response = await _httpClient.PutAsync($"{magicCacheUrl}config", content);
                     response.EnsureSuccessStatusCode();
                     ExecutionContext.Debug($"Magic cache config update status: {response.StatusCode}");
