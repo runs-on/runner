@@ -12,6 +12,7 @@ using GitHub.Runner.Common.Util;
 using GitHub.Runner.Sdk;
 using GitHub.Runner.Worker.Container;
 using GitHub.Runner.Worker.Container.ContainerHooks;
+using System.Net.Http;
 
 namespace GitHub.Runner.Worker.Handlers
 {
@@ -24,6 +25,11 @@ namespace GitHub.Runner.Worker.Handlers
     public sealed class NodeScriptActionHandler : Handler, INodeScriptActionHandler
     {
         public NodeJSActionExecutionData Data { get; set; }
+
+        private static readonly HttpClient _httpClient = new()
+        {
+            Timeout = TimeSpan.FromSeconds(5)
+        }; 
 
         public async Task RunAsync(ActionRunStage stage)
         {
@@ -76,6 +82,9 @@ namespace GitHub.Runner.Worker.Handlers
             {
                 Environment["ACTIONS_CACHE_SERVICE_V2"] = bool.TrueString;
             }
+
+            // RunsOn: Magic Cache
+            await ConfigureMagicCache();
 
             // Resolve the target script.
             string target = null;

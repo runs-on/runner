@@ -711,6 +711,7 @@ namespace GitHub.Runner.Common
     {
         UserCancelled = 0,
         OperatingSystemShutdown = 1,
-        InfrastructureInterrupted = 2,
+        // RunsOn: Spot interruption
+        InfrastructureInterrupted = 11,
     }
 }

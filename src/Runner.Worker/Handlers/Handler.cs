@@ -8,6 +8,7 @@ using GitHub.Runner.Common;
 using GitHub.Runner.Common.Util;
 using GitHub.Runner.Sdk;
 using Pipelines = GitHub.DistributedTask.Pipelines;
+using System.Net.Http;
 
 namespace GitHub.Runner.Worker.Handlers
 {
@@ -32,6 +33,11 @@ namespace GitHub.Runner.Worker.Handlers
         // You can set environment variable greater then 32K, but that variable will not be able to read in node.exe.
         private const int _environmentVariableMaximumSize = 32766;
 #endif
+
+        private static readonly HttpClient _httpClient = new()
+        {
+            Timeout = TimeSpan.FromSeconds(5)
+        };
 
         protected IActionCommandManager ActionCommandManager { get; private set; }
 
@@ -229,6 +235,49 @@ namespace GitHub.Runner.Worker.Handlers
                     string.Empty;
                 string newPath = PathUtil.PrependPath(prepend, originalPath);
                 AddEnvironmentVariable(Constants.PathVariable, newPath);
+            }
+        }
+
+        // RunsOn: Magic Cache
+        protected async Task ConfigureMagicCache()
+        {
+            var magicCacheUrl = System.Environment.GetEnvironmentVariable("RUNS_ON_MAGIC_CACHE_URL");
+            if (!string.IsNullOrEmpty(magicCacheUrl))
+            {
+                var configParams = new List<KeyValuePair<string, string>>();
+                if (Environment.ContainsKey("ACTIONS_CACHE_SERVICE_V2"))
+                {
+                    Environment["ACTIONS_CACHE_SERVICE_V2_ORIGINAL"] = Environment["ACTIONS_CACHE_SERVICE_V2"];
+                    configParams.Add(new KeyValuePair<string, string>("ACTIONS_CACHE_SERVICE_V2", Environment["ACTIONS_CACHE_SERVICE_V2_ORIGINAL"]));
+                }
+                if (Environment.ContainsKey("ACTIONS_CACHE_URL"))
+                {
+                    Environment["ACTIONS_CACHE_URL_ORIGINAL"] = Environment["ACTIONS_CACHE_URL"];
+                    configParams.Add(new KeyValuePair<string, string>("ACTIONS_CACHE_URL", Environment["ACTIONS_CACHE_URL_ORIGINAL"]));
+                }
+                if (Environment.ContainsKey("ACTIONS_RESULTS_URL"))
+                {
+                    Environment["ACTIONS_RESULTS_URL_ORIGINAL"] = Environment["ACTIONS_RESULTS_URL"];
+                    configParams.Add(new KeyValuePair<string, string>("ACTIONS_RESULTS_URL", Environment["ACTIONS_RESULTS_URL_ORIGINAL"]));
+                }
+
+                // always use v2 with Magic Cache
+                Environment["ACTIONS_CACHE_SERVICE_V2"] = bool.TrueString;
+                Environment["ACTIONS_CACHE_URL"] = magicCacheUrl;
+                Environment["ACTIONS_RESULTS_URL"] = magicCacheUrl;
+
+                // Configure magic cache with original results URL
+                try
+                {
+                    using var content = new FormUrlEncodedContent(configParams);
+                    using var response = await _httpClient.PutAsync($"{magicCacheUrl}config", content);
+                    response.EnsureSuccessStatusCode();
+                    ExecutionContext.Debug($"Magic cache config update status: {response.StatusCode}");
+                }
+                catch (Exception ex)
+                {
+                    ExecutionContext.Warning($"Failed to configure magic cache: {ex.Message}");
+                }
             }
         }
     }
